@@ -1,0 +1,211 @@
+---
+title: "Pédigré tétaplïdes"
+output: html_notebook
+---
+Face à ce jeu de données, nous allons modifier son allure pour mieux en ressortir les informations qu'il contient. Nous savons que nous avons des individus sur chaque ligne, des rosiers en l'occurrence. La colonne '16' correspond à la génération du rosier. Les autres colonnes sont à considérer par 4 car sous un format tétaploïde. Dans ce premier jeu de données, les individus sont tétaploïde. Il y a 4 marqueurs qui correspondent à des marqueurs moléculaires. Les valeurs dans le tableau représentent le nombre de nucléotides pour un marqueur moléculaire donné. 
+
+```{r}
+
+# Chargez les données depuis le fichier CSV
+data <- read.csv(file ='/home/ibotcazou/Bureau/Master_data_science/DATAS_M2/Option Biologie/projet/Pop2x_v2.csv', header = FALSE, sep = ',')
+
+data = subset(data,select = -c(V3,V4,V7,V8,V11,V12,V15,V16,V18) ) #permet de retirer la colonne 18
+
+N =  length(data[,1]) #Nombre d'individus dans l'étude
+data
+
+```
+
+# Fonction 1 : générer des enfants virtuels pour chaque gène
+
+```{r}
+
+#Gène 1 
+
+generENF_1 = function(P1,P2){
+  PP1 = c(data$V1[P1],data$V2[P1])
+  PP2 = c(data$V1[P2],data$V2[P2])
+  E = c()
+  for (i in PP1){
+    for (j in PP2){
+      E = c(E,c(i,j))
+    }
+  }
+  E = matrix(E, nrow = 4, byrow = TRUE)
+  return(E)
+}
+
+#Gène 2
+generENF_2 = function(P1,P2){
+  PP1 = c(data$V5[P1],data$V6[P1])
+  PP2 = c(data$V5[P2],data$V6[P2])
+  E = c()
+  for (i in PP1){
+    for (j in PP2){
+      E = c(E,c(i,j))
+    }
+  }
+  E = matrix(E, nrow = 4, byrow = TRUE)
+  return(E)
+}
+
+#Gène3
+generENF_3 = function(P1,P2){
+  PP1 = c(data$V9[P1],data$V10[P1])
+  PP2 = c(data$V9[P2],data$V10[P2])
+  E = c()
+  for (i in PP1){
+    for (j in PP2){
+      E = c(E,c(i,j))
+    }
+  }
+  E = matrix(E, nrow = 4, byrow = TRUE)
+  return(E)
+}
+
+#Gène 4
+
+generENF_4 = function(P1,P2){
+  PP1 = c(data$V13[P1],data$V14[P1])
+  PP2 = c(data$V13[P2],data$V14[P2])
+  E = c()
+  for (i in PP1){
+    for (j in PP2){
+      E = c(E,c(i,j))
+    }
+  }
+  E = matrix(E, nrow = 4, byrow = TRUE)
+  return(E)
+}
+
+```
+## Générer tous les enfants virtuels pour un couple de parents
+
+Nous rajoutons le tri de la taille des enchainements de nucléotides par gène pour faciliter par la suite.  
+
+```{r}
+generENF = function(P1,P2){
+  M1 = generENF_1(P1,P2)
+  M2 = generENF_2(P1,P2)
+  M3 = generENF_3(P1,P2)
+  M4 = generENF_4(P1,P2)
+  E = c()
+  for (a in 1:4){
+    for (b in 1:4){
+      for (c in 1:4){
+        for (d in 1:4){
+        E = c(E, c(sort(M1[a,]),sort(M2[b,]),sort(M3[c,]),sort(M4[d,]) ) )
+        }}}}
+  E = matrix(E, nrow =4**4, byrow = TRUE)
+  return(E)
+}
+
+```
+
+```{r}
+# Exemple
+print(generENF(1,2))
+```
+
+# Fonction 2 : comparer un enfant et les enfants virtuels pour un couple de parents et donne la probabilité que ces deux parents engendrent cet enfant.
+```{r}
+Proba_Enf_Parents = function(P1,P2,E){
+  ENF = c()
+  c = 0
+  for (i in data[E,1:8]){ ENF= c(ENF,i)}
+  ENF= c(sort(ENF[1:2]),sort(ENF[3:4]),sort(ENF[5:6]),sort(ENF[7:8]))
+  Enf_V = generENF(P1,P2)
+  for (j in 1:256){
+    if (all(Enf_V[j,] == ENF )){c=c+1}
+  }
+  return(c/256)
+}
+
+#print('la proba pour que 3 et 4 engendre 7 est :' )
+print(Proba_Enf_Parents(4,3,7))
+```
+
+# Fonction 3 : Construire la matrice des probabilités pour un enfant 
+
+```{r}
+Matrix_Proba = function(E){
+M = matrix(0, nrow = N, ncol = N)
+p=0
+for (i in 1:(N-1)){
+  for (j in (i+1):N){
+    if(data[i,9]>=data[E,9] | data[j,9]>=data[E,9])
+      {M[i,j]=0}
+    else {M[i,j] = Proba_Enf_Parents(i,j,E)}
+  }}
+return(M/sum(M))
+}
+
+Matrix_Proba(7)
+
+```
+
+# Fonction 4 : permet de récupérer le couple de parents le plus probables pour un enfant donnée sanchant que les probabilités on été normalisées dans la fonction précédente. 
+
+```{r}
+Recup_parent = function(E){
+  M = Matrix_Proba(E)
+  indices =  which(M == max(M, na.rm = TRUE), arr.ind = TRUE)
+  l = c(E,indices[1],indices[2], -log(max(M)))
+  return(l)
+}
+
+
+
+```
+
+```{r}
+L = c()
+for (i in 1:N){
+  if (data[i,9]>1){
+  l = Recup_parent(i)
+  L= c(L,l)
+  }
+}
+
+L = matrix(L, ncol = 4,byrow = TRUE )
+# Supprimer les lignes avec NA ou NaN
+Mat = L[complete.cases(L), ]
+Mat
+```
+
+```{r}
+library(igraph)
+
+# Créez un graphe non orienté vide
+g = graph.empty(directed = TRUE)
+
+# Spécifiez un nom pour chaque nœud
+node_names <- c(1:N) 
+
+# Ajoutez n noeuds à l'arbre
+g = add_vertices(g, N , name=node_names)
+
+
+for (i in 1:length(Mat[,1])){
+  E = Mat[i,1]
+  P1 = Mat[i,2]
+  P2 = Mat[i,3]
+  
+  
+  edge_label = round(exp(-Mat[i,4]), 2)
+  
+  g = add_edges(g, c(P1, E, P2, E))
+  
+  # Ajoutez des labels et des paramètres d'arête ici si nécessaire
+  E(g)$color = "blue"
+  E(g)$width = 0.1
+  E(g)$arrow.size = 0.1
+  E(g)$label.dist = 4
+  E(g)$label.font <- 0.3
+  
+  
+}
+
+plot(g, vertex.label=node_names)
+```
+
